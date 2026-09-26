@@ -8,10 +8,10 @@ from ..segments import runs
 from .context import Context
 
 CROSSINGS = ("cross_main", "cross_upper", "cross_side")
-JAY_MIN_SEC = 2.0
-JAY_CROSSING_CLEARANCE = 40.0   # ref px away from any crossing's stripes
+JAY_MIN_SEC = 1.0              # people cut across the junction gap in 1-2 s
+JAY_CROSSING_CLEARANCE = 30.0   # ref px away from any crossing's stripes
 JAY_KERB_DEPTH = 18.0           # ref px inside the carriageway (not standing at the kerb)
-RIDER_SPEED = 45.0              # ref px/s: a 'person' this fast is riding a scooter/bike
+RIDER_SPEED = 80.0              # ref px/s median: a 'person' this fast is riding (walkers near the camera reach ~55)
 SAFE_ZONES = ("median", "refuge", "island_a", "island_b", "island_c")
 YIELD_RADIUS = 90.0      # ref px: pedestrian this close to the vehicle's path on the crossing
 YIELD_MIN_SPEED = 20.0    # driving through, not creeping in a queue
@@ -33,8 +33,9 @@ def jaywalking(ctx: Context) -> list[tuple[float, float]]:
     out = []
     P = ctx.scene.polygons
     for p in ctx.people():
-        if p.rider_hits >= 1 or (len(p.t) >= 5 and np.percentile(p.speed, 95) > RIDER_SPEED):
-            continue                               # rider in traffic, not a pedestrian
+        moving = p.speed[p.speed > 5.0]
+        if p.rider_hits >= 1 or (len(moving) >= 5 and np.median(moving) > RIDER_SPEED):
+            continue                               # rider in traffic, not a pedestrian (median: robust to box jitter)
         depth = polygon_depth(P["road"], p.xy)
         clear = np.min([-polygon_depth(P[c], p.xy) for c in CROSSINGS], axis=0)
         safe = np.max([polygon_depth(P[z], p.xy) for z in SAFE_ZONES], axis=0)
