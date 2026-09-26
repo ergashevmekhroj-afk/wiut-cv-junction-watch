@@ -77,8 +77,8 @@ defines the legal direction for `wrong_way`.
 | `red_light` | crosses the main stop line > 4.5 s into red and > 1.5 s before green, at speed, and drives on into the junction |
 | `stop_line` | stops past the stop line (stop zone / crossing) during red; ends when the signal turns green |
 | `illegal_u_turn` | heading reverses > 150° after starting on the main carriageway, **and** the reversal is made on a pedestrian crossing or across the solid median. Uzbekistan's Rules of the Road (clause 62) prohibit U-turns on pedestrian crossings; a U-turn inside the intersection from the left lane is otherwise legal and no sign at this junction forbids it, so the common U-turn around the median nose is counted as legal (reported in the EDA, not as an event). Fragments of the same vehicle are stitched |
-| `failure_to_yield` | vehicle moving through a crossing while a pedestrian on that crossing is within ~90 px of its path |
-| `jaywalking` | pedestrian > 18 px inside the carriageway, > 40 px from every crossing, off islands/median, ≥ 2 s; riders (person over a bike/motorbike box, or moving at vehicle speed) excluded |
+| `failure_to_yield` | vehicle moving through a crossing (front entering to rear leaving) while a pedestrian on that crossing is within ~90 px of its path; conflicts less than 3 s apart form one event |
+| `jaywalking` | pedestrian > 18 px inside the carriageway, > 30 px from every crossing, off islands/median, ≥ 1 s; riders (person over a bike/motorbike box, or median speed above 80 px/s) excluded; people jaywalking within 4 s of each other form one event |
 | `stopped_vehicle` | stationary ≥ 10 s on the carriageway, not explained by the signal, a queue, pedestrians on a crossing ahead, or (< 20 s) waiting for a gap in the junction |
 | `wrong_way` | moving against a high-coherence cell of the flow prior for ≥ 1.5 s |
 | `accident` | footprints overlap (not across the median), impact-like deceleration (≥ 65 % of speed lost, ≥ 90 px/s²), both stationary ≥ 3 s after |
@@ -106,6 +106,26 @@ uses Part A output.
 * YOLO11s detector: COCO-pretrained weights from Ultralytics, used as is (no fine-tuning).
 * Flow prior: statistics of our own tracks on the four sample videos.
 * Everything else is rule-based, with thresholds calibrated on the sample videos.
+
+## Evaluation on our dev labels
+
+`labels/ground_truth_dev.json` holds one teammate's labels of `sample_01.mp4`
+(8 events). Scored with the official `evaluate.py`:
+
+| class | F1 (mean of tIoU 0.3/0.5/0.7) | TP/FP/FN @0.5 | note |
+|---|---|---|---|
+| jaywalking | 0.44 | 1/3/1 | 241.9–253.0 s matches the label 241.2–253.9 s |
+| failure_to_yield | 0.00 | 0/22/1 | label is one 52 s block; we report each car–pedestrian conflict |
+| congestion | 0.00 | 0/0/3 | our rule ignores ordinary red-light queues |
+| illegal_u_turn | 0.00 | 0/0/1 | the labelled U-turn turns inside the junction, which is legal under clause 62 |
+| road_obstacle | 0.00 | 0/0/1 | not predicted |
+| stop_line, red_light | 0.00 | 0/3/0, 0/1/0 | not labelled on this video |
+
+**Score A = 0.06** on this single labelled video. The disagreements are mostly
+definitional (what counts as one event, whether a queue is congestion, whether a
+junction U-turn is illegal), so we did not tune the rules to one label set.
+The labels did expose one real bug, now fixed: brisk walkers near the camera
+were treated as scooter riders and dropped from `jaywalking`.
 
 ## Data and models
 
