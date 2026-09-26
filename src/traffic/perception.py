@@ -89,20 +89,26 @@ DET_WIDTH = 1280   # frames are downscaled to this width before the detector (4K
 BG_FRAMES = 25     # frames kept (downscaled) for the median background
 
 
-def _reader(cap, stride: int, fps: float, q, stop, frame_hook, bg_every: int):
+def _reader(cap, stride: int, fps: float, q, stop, frame_hook, bg_every: int, stats: dict):
     """Decode thread: grab every frame, retrieve every `stride`-th, downscale, queue it.
 
     OpenCV releases the GIL while decoding, so this overlaps with the detector
     running on the GPU in the main thread.
     """
+    import time as _time
     import cv2 as _cv2
     idx = 0
     try:
         while not stop.is_set():
+            t0 = _time.perf_counter()
             if not cap.grab():
                 break
+            stats["grab"] += _time.perf_counter() - t0
+            stats["n"] = idx + 1
             if idx % stride == 0:
+                t1 = _time.perf_counter()
                 ok, frame = cap.retrieve()
+                stats["retrieve"] += _time.perf_counter() - t1
                 if not ok:
                     break
                 if frame_hook is not None:
@@ -117,13 +123,18 @@ def _reader(cap, stride: int, fps: float, q, stop, frame_hook, bg_every: int):
 
 
 def run_perception(video_path: str, cfg: PerceptionConfig | None = None, model=None,
-                   progress=None, frame_hook=None, deadline: float | None = None) -> tuple[np.ndarray, dict]:
+                   progress=None, frame_hook=None, deadline: float | None = None,
+                   reserve_decode: float = 0.0) -> tuple[np.ndarray, dict]:
     """Detect and track every road user. Returns (obs table [N, 9] in NATIVE px, video info).
 
     One decoding pass. frame_hook(idx, t, frame) is called on every sampled
     full-resolution frame (signal lamp). info["bg"] is the median of ~25 sampled
     frames (for registration). If `deadline` (time.perf_counter()) passes, the
     pass stops early and returns what it has (info["truncated_at"]).
+    reserve_decode > 0 moves that deadline earlier by reserve_decode x the
+    measured time to decode (and colour-convert) the whole video once, so a
+    second full decoding pass (the harness streaming frames to Part B) still
+    fits in the budget on slow machines.
     On a cache hit, no frame is decoded and frame_hook is not called.
     """
     import queue
@@ -151,7 +162,8 @@ def run_perception(video_path: str, cfg: PerceptionConfig | None = None, model=N
     cap = cv2.VideoCapture(video_path)
     q: queue.Queue = queue.Queue(maxsize=6)
     stop = threading.Event()
-    th = threading.Thread(target=_reader, args=(cap, stride, info["fps"], q, stop, frame_hook, bg_every), daemon=True)
+    stats = {"grab": 0.0, "retrieve": 0.0, "n": 0}
+    th = threading.Thread(target=_reader, args=(cap, stride, info["fps"], q, stop, frame_hook, bg_every, stats), daemon=True)
     th.start()
     rows, bg = [], []
     scale = 1.0
@@ -176,7 +188,13 @@ def run_perception(video_path: str, cfg: PerceptionConfig | None = None, model=N
                 rows.append([idx, t, ids[k], cls[k], *xyxy[k], cf[k]])
         if progress and (idx // stride) % 50 == 0:
             progress(idx / max(1, info["n_frames"]))
-        if deadline is not None and time.perf_counter() > deadline:
+        eff_deadline = deadline
+        if deadline is not None and reserve_decode > 0 and stats["n"] > 50:
+            # per-frame cost of a full read(): grab + colour conversion (measured on the sampled frames)
+            per_frame = stats["grab"] / stats["n"] + stats["retrieve"] / max(1, stats["n"] // stride)
+            eff_deadline = deadline - reserve_decode * per_frame * info["n_frames"]
+            info["decode_ms_per_frame"] = round(1000 * per_frame, 2)
+        if eff_deadline is not None and time.perf_counter() > eff_deadline:
             info["truncated_at"] = idx / info["fps"]
             stop.set()
             while q.get() is not None:   # drain so the reader can exit
@@ -188,6 +206,9 @@ def run_perception(video_path: str, cfg: PerceptionConfig | None = None, model=N
     if bg:
         info["bg"] = np.median(np.stack(bg), 0).astype(np.uint8)
     if cache is not None and "truncated_at" not in info:
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(cache, obs=obs, **({"bg": info["bg"]} if "bg" in info else {}))
+        try:   # caching is a dev convenience: it must never fail a run
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            np.savez_compressed(cache, obs=obs, **({"bg": info["bg"]} if "bg" in info else {}))
+        except OSError:
+            pass
     return obs, info

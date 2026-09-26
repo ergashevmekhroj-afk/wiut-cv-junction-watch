@@ -1,0 +1,79 @@
+{
+ "sample_01.mp4": {
+  "duration": 340.34,
+  "fps": 29.97,
+  "events": [
+   [
+    40.98,
+    87.03,
+    "congestion"
+   ],
+   [
+    113.29,
+    130.39,
+    "jaywalking"
+   ],
+   [
+    126.17,
+    148.04,
+    "congestion"
+   ],
+   [
+    179.1,
+    231.3,
+    "failure_to_yield"
+   ],
+   [
+    241.2,
+    253.87,
+    "jaywalking"
+   ],
+   [
+    277.6,
+    300.25,
+    "congestion"
+   ],
+   [
+    282.5,
+    288.44,
+    "illegal_u_turn"
+   ],
+   [
+    304.06,
+    329.91,
+    "road_obstacle"
+   ]
+  ]
+ },
+ "sample_02.mp4": {
+  "duration": 317.818,
+  "fps": 29.97,
+  "events": [
+   [
+    43.49,
+    68.14,
+    "congestion"
+   ],
+   [
+    139.15,
+    172.54,
+    "road_obstacle"
+   ],
+   [
+    209.73,
+    247.86,
+    "failure_to_yield"
+   ],
+   [
+    294.28,
+    305.86,
+    "jaywalking"
+   ],
+   [
+    305.9,
+    316.96,
+    "jaywalking"
+   ]
+  ]
+ }
+}

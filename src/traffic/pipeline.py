@@ -28,7 +28,7 @@ ENABLED = {
     "jaywalking", "failure_to_yield", "near_miss", "accident", "congestion",
 }
 MERGE_GAP = {"jaywalking": 4.0, "congestion": 5.0, "failure_to_yield": 3.0, "red_light": 0.5}
-MIN_LEN = {"stopped_vehicle": 10.0, "congestion": 20.0}
+MIN_LEN = {"stopped_vehicle": 10.0, "congestion": 20.0, "jaywalking": 6.0}   # jaywalking: labelled events last 11-17 s
 
 
 def _phase_cache(video_path: str) -> Path | None:
@@ -53,8 +53,18 @@ def _first_frame_H(video_path: str, width: int) -> tuple[np.ndarray, int]:
     return H @ np.diag([1280.0 / width, 1280.0 / width, 1.0]), n
 
 
+def _save_phase(pc: Path | None, t: np.ndarray, phase: np.ndarray) -> None:
+    if pc is None:
+        return
+    try:   # caching must never fail a run
+        pc.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(pc, t=t, phase=phase)
+    except OSError:
+        pass
+
+
 def analyse(video_path: str, cfg: PerceptionConfig | None = None, model=None, progress=None,
-            deadline: float | None = None) -> dict:
+            deadline: float | None = None, reserve_decode: float = 0.0) -> dict:
     """Everything the rules, the renderer and the website need for one video."""
     scene = Scene.load()
     info = video_info(video_path)
@@ -66,7 +76,8 @@ def analyse(video_path: str, cfg: PerceptionConfig | None = None, model=None, pr
         lamp_t.append(t)
         lamp_s.append(reader.ped_state(frame))
 
-    obs, info = run_perception(video_path, cfg, model, progress, frame_hook=hook, deadline=deadline)
+    obs, info = run_perception(video_path, cfg, model, progress, frame_hook=hook, deadline=deadline,
+                               reserve_decode=reserve_decode)
     # refine the registration on the median background collected during the pass
     if "bg" in info:
         Hb, nb = register(info["bg"])
@@ -77,15 +88,14 @@ def analyse(video_path: str, cfg: PerceptionConfig | None = None, model=None, pr
     pc = _phase_cache(video_path)
     if lamp_t:
         phase_t, phase = np.asarray(lamp_t), phase_series(np.asarray(lamp_t), np.asarray(lamp_s))
-        if pc is not None:
-            np.savez_compressed(pc, t=phase_t, phase=phase)
+        if "truncated_at" not in info:
+            _save_phase(pc, phase_t, phase)
     elif pc is not None and pc.exists():
         d = np.load(pc)
         phase_t, phase = d["t"], d["phase"]
     else:  # detector cache hit but no stored phase: one extra light pass
         phase_t, phase = read_phase(video_path, reader)
-        if pc is not None:
-            np.savez_compressed(pc, t=phase_t, phase=phase)
+        _save_phase(pc, phase_t, phase)
     tracks = build_tracks(obs, H, (info["width"], info["height"]))
     mark_riders(tracks, obs)
     return {"info": info, "H": H, "n_inliers": n_inliers, "obs": obs, "tracks": tracks,
