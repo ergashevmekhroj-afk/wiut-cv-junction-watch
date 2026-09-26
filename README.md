@@ -64,7 +64,9 @@ from a small ROI (colour-difference score ~100 lit vs ~0 dark). On the samples
 every stop-line crossing of the main carriageway happens while this lamp is
 green, so it runs in phase with the main carriageway. Calibration from the
 samples: legal clearing traffic crosses up to 3.9 s after the lamp turns red,
-and drivers move off up to 1 s before it turns green.
+and queues move off up to 5 s before it turns green (sample 02), so `red_light`
+also needs behavioural evidence (no group departure, other vehicles still waiting).
+The camera can drift slowly (sample_01), so the lamp ROI is re-registered during the pass.
 
 **Learned flow prior.** `scene/flow_prior.npz` stores, per 32 px cell, the mean
 driving direction of all vehicle tracks in the samples and its coherence. It
@@ -92,12 +94,14 @@ checked on the samples.
 
 ### Part B — risk score
 
-`src/traffic/risk.py`: a second YOLO11s instance (640 px, every 4th frame) with
-its own ByteTrack, registered to the reference view from the **first frame
-only**. For each pair of road users within 200 px, constant-velocity
-time-to-collision and closing speed give a base risk ≤ 0.45; only crossing
-conflicts (heading difference ≥ 30° or a pedestrian) with TTC < 1.2 s and
-closing speed > 60 px/s exceed the 0.5 alarm threshold. A 0.6 s causal mean
+`src/traffic/risk.py`: a second YOLO11s instance (640 px, ≈7.5 fps) with its own
+ByteTrack, registered to the reference view from the **first frame only**. For
+each pair of road users, danger = closing speed × exp(−TTC) under constant
+velocity; crossing conflicts (heading difference ≥ 30° or a pedestrian) weigh 1.0,
+same-direction pairs 0.4. The danger of the worst pair is mapped to a probability
+through its quantiles in normal traffic on the samples
+(`scene/risk_calibration.json`, 8,271 samples): ordinary traffic stays below 0.5,
+and only danger beyond the maximum seen in normal traffic raises an alarm. A short causal mean
 suppresses one-frame spikes. The estimator never reads the video file and never
 uses Part A output.
 
@@ -114,19 +118,25 @@ uses Part A output.
 
 | class | F1 (mean of tIoU 0.3/0.5/0.7) | TP/FP/FN @0.5 | note |
 |---|---|---|---|
-| jaywalking | 0.33 | 2/4/2 | e.g. sample_01 241.9–253.0 s vs label 241.2–253.9 s |
-| failure_to_yield | 0.00 | 0/40/2 | labels are one 38–52 s block per video; we report each car–pedestrian conflict |
+| jaywalking | 0.40 | 2/4/2 | e.g. sample_01 241.9–253.0 s vs label 241.2–253.9 s |
+| failure_to_yield | 0.00 | 0/42/2 | labels are one 38–52 s block per video; we report each car–pedestrian conflict |
 | congestion | 0.00 | 0/0/4 | our rule ignores ordinary red-light queues |
 | illegal_u_turn | 0.00 | 0/1/1 | the labelled U-turn turns inside the junction, legal under clause 62 |
 | road_obstacle | 0.00 | 0/0/2 | not predicted |
 | stop_line, red_light | 0.00 | 0/6/0, 0/3/0 | not labelled on these videos |
 
-**Score A = 0.05** on the two labelled videos. The disagreements are mostly
+**Score A = 0.04** on the two labelled videos. The disagreements are mostly
 definitional (what counts as one event, whether a queue is congestion, whether a
-junction U-turn is illegal), so we changed only two things: a real bug and the minimum length of a
-jaywalking event (6 s; the labelled ones last 11–17 s).
-The labels did expose one real bug, now fixed: brisk walkers near the camera
-were treated as scooter riders and dropped from `jaywalking`.
+junction U-turn is illegal), so we changed only the minimum length of a jaywalking event (6 s; the labelled
+ones last 11–17 s) and fixed two real bugs:
+
+* brisk walkers near the camera were treated as scooter riders and dropped from `jaywalking` (found through the labels);
+* the camera in sample_01 pans ~8 px during its first 20 s, so the lamp ROI (registered on the first frame) slid off the lamp and the whole video read as red. The lamp reader now re-registers on single frames at 2, 5, 10, 20, 40 s and then every 60 s (`REREG_AT` in `pipeline.py`); a red halo on a lamp that has just switched off no longer blocks a lit green (`lamp_red_full`).
+
+`predictions_samples.json` is the full GPU run (Colab T4). After the lamp fix, the
+events of sample_01 were recomputed from the same cached detections with the
+fixed phase reader. For samples 02–04 the camera does not move, and the fixed reader reproduces
+the GPU phase (99.8–100 % agreement), so their events are unchanged.
 
 ## Data and models
 
@@ -154,7 +164,10 @@ detector once the remaining frames alone would need the rest of the budget. On
 a fast machine neither triggers. `predictions_samples.json` is a full run with
 `TRAFFIC_NO_DEADLINE=1` (guards off), i.e. what a machine fast enough not to
 trigger them produces. Measured on Colab (T4, 2 vCPU), decoding the 4K samples
-alone takes ~1.5 x their duration, so there the guards do trigger.
+alone takes ~1.5 x their duration, so there the guards do trigger. With the
+guards off, the full run took ≈2.9 x duration for Part A and ≈3.2 x for Part B on
+that machine, dominated by 4K decoding on 2 CPU cores. With the guards on (the default), the
+total stays inside the 3 x budget by stopping early.
 
 
 Part A decodes each video once (every frame is grabbed, every 3rd is decoded

@@ -45,13 +45,16 @@ class SignalReader:
         self.r = max(2, int(round(4 * scale)))
         self.red_on = scene.meta.get("lamp_red_on", 45.0)
         self.green_on = scene.meta.get("lamp_green_on", 28.0)
+        self.red_full = scene.meta.get("lamp_red_full", 70.0)
 
     def ped_state(self, frame: np.ndarray) -> int:
         """Pedestrian lamp state: RED, GREEN or UNKNOWN (both dark / both lit)."""
         red, grn = lamp_scores(frame, self.p_red, self.p_green, self.r)
         if red >= self.red_on and grn < self.green_on:
             return RED
-        if grn >= self.green_on and red < self.red_on:
+        if grn >= self.green_on and red < self.red_full:
+            # a fully lit red lamp scores ~100; on compressed copies the red lamp keeps a
+            # weak halo (~55) for a few seconds after switching, while the green is lit
             return GREEN
         return UNKNOWN
 

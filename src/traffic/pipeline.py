@@ -40,6 +40,10 @@ def _phase_cache(video_path: str) -> Path | None:
     return Path(root) / f"{Path(video_path).stem}-{h}-phase.npz"
 
 
+REREG_AT = (2.0, 5.0, 10.0, 20.0, 40.0)   # s: lamp-ROI re-registration times, then every REREG_EVERY
+REREG_EVERY = 60.0
+
+
 def _first_frame_H(video_path: str, width: int) -> tuple[np.ndarray, int]:
     """Registration from the first frame only (no seeking): used for the lamp ROI."""
     import cv2
@@ -69,12 +73,26 @@ def analyse(video_path: str, cfg: PerceptionConfig | None = None, model=None, pr
     scene = Scene.load()
     info = video_info(video_path)
     H, n_inliers = _first_frame_H(video_path, info["width"])
-    reader = SignalReader(scene, H)
+    state = {"reader": SignalReader(scene, H), "next": 0}
     lamp_t, lamp_s = [], []
 
     def hook(idx, t, frame):
+        # The camera can drift slowly (sample_01 pans ~8 px over its first 20 s), and the
+        # lamp ROI is only a few px wide: re-register on single frames at a few moments.
+        if state["next"] < len(REREG_AT) and t >= REREG_AT[state["next"]] or \
+                state["next"] >= len(REREG_AT) and t >= REREG_AT[-1] + REREG_EVERY * (state["next"] - len(REREG_AT) + 1):
+            state["next"] += 1
+            try:
+                import cv2
+                small = cv2.resize(frame, (1280, int(round(frame.shape[0] * 1280 / frame.shape[1]))),
+                                   interpolation=cv2.INTER_AREA)
+                Hn, n = register(small)
+                if n >= 50:
+                    state["reader"] = SignalReader(scene, Hn @ np.diag([1280.0 / frame.shape[1]] * 2 + [1.0]))
+            except Exception:   # registration must never fail a run
+                pass
         lamp_t.append(t)
-        lamp_s.append(reader.ped_state(frame))
+        lamp_s.append(state["reader"].ped_state(frame))
 
     obs, info = run_perception(video_path, cfg, model, progress, frame_hook=hook, deadline=deadline,
                                reserve_decode=reserve_decode)
@@ -94,7 +112,7 @@ def analyse(video_path: str, cfg: PerceptionConfig | None = None, model=None, pr
         d = np.load(pc)
         phase_t, phase = d["t"], d["phase"]
     else:  # detector cache hit but no stored phase: one extra light pass
-        phase_t, phase = read_phase(video_path, reader)
+        phase_t, phase = read_phase(video_path, state["reader"])
         _save_phase(pc, phase_t, phase)
     tracks = build_tracks(obs, H, (info["width"], info["height"]))
     mark_riders(tracks, obs)
