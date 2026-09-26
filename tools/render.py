@@ -31,6 +31,19 @@ EVENT_COLORS = {  # BGR
 OUT_W = 1280
 
 
+def ffmpeg_exe() -> str:
+    """System ffmpeg if present, else the static binary shipped with imageio-ffmpeg."""
+    import shutil
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except ImportError as e:
+        raise RuntimeError("ffmpeg not found: install it (apt) or `pip install imageio-ffmpeg`") from e
+
+
 def render(video: str, out: str, events: list, risk: list, analysis: dict, tail_sec: float = 2.0) -> None:
     info = analysis["info"]
     H = analysis["H"]
@@ -50,7 +63,7 @@ def render(video: str, out: str, events: list, risk: list, analysis: dict, tail_
     risk_v = np.array([r[1] for r in risk]) if risk else np.zeros(0)
     tails: dict[int, list] = {}
 
-    proc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
+    proc = subprocess.Popen([ffmpeg_exe(), "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
                              "-s", f"{OUT_W}x{out_h}", "-r", f"{fps}", "-i", "-", "-c:v", "libx264",
                              "-preset", "veryfast", "-crf", "26", "-pix_fmt", "yuv420p",
                              "-movflags", "+faststart", out], stdin=subprocess.PIPE)
