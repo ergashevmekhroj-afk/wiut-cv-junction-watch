@@ -1,0 +1,265 @@
+<title>Junction Labeller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#EEF0EC; --panel:#FFFFFF; --ink:#1A1F21; --muted:#5E6A6C; --line:#D4D9D4;
+  --accent:#E3A008; --accent-ink:#1A1F21; --lane:#F5F6F3; --danger:#C2372C; --ok:#2F8F57;
+  --focus:#1F6FB2;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#111517; --panel:#1A2023; --ink:#E6E9E4; --muted:#95A1A2; --line:#2C3538;
+    --accent:#F0B429; --accent-ink:#111517; --lane:#151A1C; --danger:#E5675C; --ok:#4CC27E; --focus:#6FB3F0;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#111517; --panel:#1A2023; --ink:#E6E9E4; --muted:#95A1A2; --line:#2C3538;
+  --accent:#F0B429; --accent-ink:#111517; --lane:#151A1C; --danger:#E5675C; --ok:#4CC27E; --focus:#6FB3F0;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:16px;padding-block:18px 40px;display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;justify-content:space-between}
+h1{font-family:var(--display);font-weight:700;font-size:30px;letter-spacing:.02em;margin:0;text-transform:uppercase;text-wrap:balance}
+h1 span{color:var(--accent)}
+h2{font-family:var(--display);font-weight:600;font-size:18px;letter-spacing:.06em;text-transform:uppercase;margin:0;color:var(--muted)}
+.sub{color:var(--muted);max-width:70ch;margin:0}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:12px}
+.stage{position:relative;background:#000;border-radius:4px;overflow:hidden;aspect-ratio:16/9;max-width:100%}
+.stage video{width:100%;height:100%;display:block}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#C9D0CC;padding:16px;gap:8px;align-content:center}
+.empty b{font-family:var(--display);font-size:22px;letter-spacing:.05em;text-transform:uppercase;color:#fff}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.clock{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px}
+.clock small{color:var(--muted)}
+button,.filebtn,select,input[type=number],input[type=text]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 10px}
+button,.filebtn{cursor:pointer}
+button:hover,.filebtn:hover{border-color:var(--muted)}
+button:focus-visible,.filebtn:focus-within,select:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.ghost{background:transparent}
+button.danger{color:var(--danger)}
+.filebtn input{position:absolute;opacity:0;width:1px;height:1px}
+.filebtn{position:relative;display:inline-flex}
+kbd{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:0 5px;background:var(--lane)}
+.mark{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:6px 10px;align-items:center;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.mark label{font-family:var(--sans);color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.classes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.cls{display:flex;gap:8px;align-items:center;text-align:left;padding:6px 8px;font-size:13px}
+.cls .sw{width:10px;height:10px;border-radius:2px;flex:none}
+.cls .k{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.cls[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.timeline{overflow-x:auto}
+canvas{display:block;width:100%;cursor:pointer}
+.events{max-height:360px;overflow:auto;border-top:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td,th{padding:6px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-weight:500;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+td.t input{width:84px;font-family:var(--mono);padding:3px 6px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--lane);border:1px solid var(--line)}
+.chip .sw{width:8px;height:8px;border-radius:2px}
+textarea{width:100%;min-height:150px;font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--lane);border:1px solid var(--line);border-radius:4px;padding:8px}
+.note{color:var(--muted);font-size:12.5px;margin:0}
+.status{font-size:12.5px;color:var(--ok);min-height:1.2em}
+.status.err{color:var(--danger)}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13px}
+.hint-tag{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+</style>
+
+<div class="wrap">
+  <header>
+    <div style="display:grid;gap:4px">
+      <h1>Junction <span>Labeller</span></h1>
+      <p class="sub">Mark every traffic event in a sample video as <code>[start, end, class]</code>, then export a <code>ground_truth.json</code> that <code>evaluate.py</code> reads. Follow the start/end conventions from the task brief.</p>
+    </div>
+    <div class="row">
+      <label class="filebtn" for="fileVideo">Open video…<input id="fileVideo" type="file" accept="video/mp4,video/*"></label>
+      <label class="filebtn" for="fileImport">Import labels…<input id="fileImport" type="file" accept=".json,application/json"></label>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-label="Video">
+      <div class="stage">
+        <video id="vid" playsinline preload="metadata"></video>
+        <div class="empty" id="empty"><b>No video open</b><span>Open a sample .mp4 from your computer. It never leaves your browser.</span></div>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <button id="bPlay" title="Space">Play</button>
+          <button class="ghost" id="bBack" title="Shift+Left">−1 s</button>
+          <button class="ghost" id="bFrameBack" title="Left">−1 frame</button>
+          <button class="ghost" id="bFrameFwd" title="Right">+1 frame</button>
+          <button class="ghost" id="bFwd" title="Shift+Right">+1 s</button>
+          <select id="rate" aria-label="Playback speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+        </div>
+        <div class="clock" id="clock">0.00 s <small>/ 0.00 s · frame 0</small></div>
+      </div>
+      <div class="timeline"><canvas id="tl" height="10" aria-label="Event timeline: click to jump"></canvas></div>
+      <div class="row" style="justify-content:space-between">
+        <span class="chip" id="vidName">no video</span>
+        <label class="row" for="fps" style="gap:6px"><span class="note">fps</span><input id="fps" type="number" step="0.001" value="29.97" style="width:90px"></label>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="Mark an event">
+      <h2>Mark event</h2>
+      <div class="mark">
+        <label for="mStart">Start</label><input id="mStart" type="text" value="—" readonly>
+        <label for="mEnd">End</label><input id="mEnd" type="text" value="—" readonly>
+      </div>
+      <div class="row">
+        <button id="bStart"><kbd>[</kbd> Set start</button>
+        <button id="bEnd"><kbd>]</kbd> Set end</button>
+        <button class="primary" id="bAdd"><kbd>Enter</kbd> Add</button>
+      </div>
+      <div class="classes" id="classes" role="group" aria-label="Class"></div>
+      <div class="status" id="status" role="status"></div>
+      <details>
+        <summary class="note" style="cursor:pointer">Keyboard</summary>
+        <div class="keys" style="margin-top:8px">
+          <kbd>Space</kbd><span>play / pause</span>
+          <kbd>← →</kbd><span>one frame (hold Shift for 1 s)</span>
+          <kbd>[ ]</kbd><span>set start / end at the current frame</span>
+          <kbd>1–9 0 q w e r</kbd><span>pick class (shown on each button)</span>
+          <kbd>Enter</kbd><span>add the event</span>
+        </div>
+      </details>
+    </aside>
+  </div>
+
+  <section class="panel" aria-label="Events">
+    <div class="row" style="justify-content:space-between">
+      <h2>Events in this video</h2>
+      <div class="row">
+        <label class="row" for="showHints" style="gap:6px"><input id="showHints" type="checkbox" checked> <span class="note">Show pipeline hints (grey lane, not labels)</span></label>
+      </div>
+    </div>
+    <div class="events"><table><thead><tr><th>Class</th><th>Start</th><th>End</th><th>Length</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+  </section>
+
+  <section class="panel" aria-label="Export">
+    <div class="row" style="justify-content:space-between">
+      <h2>ground_truth.json</h2>
+      <div class="row">
+        <button class="primary" id="bCopy">Copy JSON</button>
+        <button id="bDownload">Download</button>
+      </div>
+    </div>
+    <p class="note">Labelling as a team: each person labels different videos, clicks Copy JSON and sends it over; the files are merged afterwards. All videos you labelled in this browser, in the format of <code>examples/ground_truth.json</code>. Paste it into <code>labels/ground_truth_dev.json</code> and run <code>python evaluate.py --pred predictions_samples.json --gt labels/ground_truth_dev.json --per-video</code>. Drafts are kept in this browser between visits. Download works when this page is opened as a local file; inside the chat viewer, use Copy.</p>
+    <textarea id="out" aria-label="Exported JSON" spellcheck="false"></textarea>
+  </section>
+</div>
+
+<script>
+const CLASSES=[
+ ["accident","#D7263D","1"],["near_miss","#F46036","2"],["red_light","#B5179E","3"],["wrong_way","#7209B7","4"],
+ ["illegal_u_turn","#3A0CA3","5"],["stopped_vehicle","#E3A008","6"],["jaywalking","#1B98E0","7"],["failure_to_yield","#0FA3B1","8"],
+ ["illegal_turn","#6A4C93","9"],["solid_line_crossing","#8AC926","0"],["stop_line","#FF595E","q"],["congestion","#8D6346","w"],
+ ["road_obstacle","#4D908E","e"],["fire_smoke","#5A5A5A","r"]];
+const COLOR=Object.fromEntries(CLASSES.map(c=>[c[0],c[1]]));
+// Pipeline output on the samples: shown only as a grey hint lane so labellers can find candidates.
+const HINTS={"sample_02.mp4": [[0.0, 25.03, "stop_line"], [2.9, 7.86, "failure_to_yield"], [11.91, 18.77, "jaywalking"], [33.73, 34.28, "failure_to_yield"], [38.54, 84.38, "illegal_u_turn"], [53.15, 70.77, "stop_line"], [55.26, 58.81, "failure_to_yield"], [58.46, 66.67, "red_light"], [63.16, 66.02, "failure_to_yield"], [84.68, 86.84, "failure_to_yield"], [91.89, 94.84, "failure_to_yield"], [131.13, 142.14, "stop_line"], [132.83, 137.54, "red_light"], [137.44, 140.59, "failure_to_yield"], [143.24, 145.6, "jaywalking"], [151.25, 153.8, "jaywalking"], [155.66, 165.42, "failure_to_yield"], [167.47, 168.12, "failure_to_yield"], [169.57, 171.52, "failure_to_yield"], [174.27, 182.93, "failure_to_yield"], [187.09, 192.74, "failure_to_yield"], [194.39, 198.45, "failure_to_yield"], [203.0, 204.65, "failure_to_yield"], [207.31, 208.66, "failure_to_yield"], [212.61, 216.67, "failure_to_yield"], [234.73, 243.19, "failure_to_yield"], [245.35, 249.1, "failure_to_yield"], [250.45, 254.9, "failure_to_yield"], [255.96, 261.31, "failure_to_yield"], [265.16, 265.72, "failure_to_yield"], [273.37, 273.92, "failure_to_yield"], [279.68, 280.83, "failure_to_yield"], [283.28, 283.63, "failure_to_yield"], [285.49, 286.54, "failure_to_yield"], [289.59, 291.04, "failure_to_yield"], [296.2, 299.25, "jaywalking"], [298.3, 299.05, "failure_to_yield"], [305.2, 315.26, "failure_to_yield"], [316.92, 317.47, "failure_to_yield"]], "sample_03.mp4": [[2.6, 5.56, "failure_to_yield"], [11.21, 13.26, "jaywalking"], [12.11, 12.86, "failure_to_yield"], [22.52, 27.18, "failure_to_yield"], [29.13, 30.88, "failure_to_yield"], [32.03, 33.68, "failure_to_yield"], [37.64, 38.49, "failure_to_yield"], [40.44, 44.49, "failure_to_yield"], [51.95, 55.11, "failure_to_yield"], [58.26, 58.81, "failure_to_yield"], [64.56, 65.32, "failure_to_yield"], [71.87, 72.42, "failure_to_yield"], [74.37, 74.92, "failure_to_yield"], [74.37, 86.39, "stop_line"], [75.98, 79.13, "failure_to_yield"], [82.48, 96.75, "jaywalking"], [93.49, 94.14, "failure_to_yield"], [100.3, 117.62, "stop_line"], [106.51, 109.76, "failure_to_yield"], [111.91, 121.07, "failure_to_yield"], [126.93, 127.38, "failure_to_yield"], [130.43, 130.98, "failure_to_yield"], [136.14, 136.69, "failure_to_yield"], [141.44, 142.79, "failure_to_yield"], [144.14, 144.59, "failure_to_yield"], [145.65, 146.1, "failure_to_yield"], [151.55, 152.2, "failure_to_yield"], [154.25, 156.31, "failure_to_yield"], [158.16, 159.91, "failure_to_yield"], [161.56, 162.11, "failure_to_yield"], [168.27, 176.63, "jaywalking"], [171.17, 172.92, "failure_to_yield"], [174.07, 175.43, "failure_to_yield"], [181.48, 194.14, "failure_to_yield"], [184.18, 186.64, "jaywalking"], [195.19, 196.85, "failure_to_yield"], [198.1, 199.75, "failure_to_yield"], [201.3, 202.45, "failure_to_yield"], [207.81, 208.36, "failure_to_yield"], [209.51, 209.96, "failure_to_yield"], [212.01, 212.46, "failure_to_yield"], [213.81, 215.97, "failure_to_yield"], [224.92, 225.48, "failure_to_yield"], [228.63, 229.08, "failure_to_yield"], [231.13, 231.58, "failure_to_yield"], [233.03, 233.48, "failure_to_yield"], [240.14, 241.79, "failure_to_yield"], [243.14, 244.29, "failure_to_yield"], [267.07, 272.32, "failure_to_yield"], [277.68, 283.13, "failure_to_yield"], [284.18, 292.34, "failure_to_yield"], [294.99, 295.75, "failure_to_yield"], [299.1, 300.85, "failure_to_yield"], [302.4, 302.95, "failure_to_yield"], [304.4, 307.86, "failure_to_yield"], [315.62, 317.72, "stop_line"], [317.42, 317.77, "failure_to_yield"]], "sample_04.mp4": [[0.4, 1.05, "failure_to_yield"], [14.31, 15.57, "failure_to_yield"], [17.62, 31.78, "failure_to_yield"], [37.04, 42.09, "failure_to_yield"], [46.75, 47.2, "failure_to_yield"], [56.66, 57.21, "failure_to_yield"], [59.96, 62.41, "failure_to_yield"], [68.97, 70.32, "failure_to_yield"], [72.47, 73.02, "failure_to_yield"], [74.57, 76.03, "failure_to_yield"], [77.88, 78.53, "failure_to_yield"], [78.88, 114.51, "stop_line"], [80.88, 83.83, "failure_to_yield"], [84.98, 85.74, "failure_to_yield"], [87.19, 99.1, "illegal_u_turn"], [98.8, 103.05, "failure_to_yield"], [106.31, 106.96, "failure_to_yield"], [108.41, 117.37, "failure_to_yield"], [118.42, 119.37, "failure_to_yield"], [125.12, 125.68, "failure_to_yield"]]};
+const STORE="junction-labeller-v1";
+let db={};             // name -> {duration,fps,events:[[s,e,label]]}
+try{db=JSON.parse(localStorage.getItem(STORE)||"{}")||{}}catch(e){db={}}
+// Example so the page opens in a working state (replaced as soon as you open a video).
+let current=null, cls="failure_to_yield", mStart=null, mEnd=null;
+const $=id=>document.getElementById(id);
+const vid=$("vid"), tl=$("tl");
+function save(){try{localStorage.setItem(STORE,JSON.stringify(db))}catch(e){} renderOut()}
+function fps(){return parseFloat($("fps").value)||29.97}
+function fmt(t){return t==null?"—":t.toFixed(2)}
+function status(msg,err){const s=$("status");s.textContent=msg;s.classList.toggle("err",!!err)}
+// class buttons
+const cbox=$("classes");
+CLASSES.forEach(([id,col,key])=>{const b=document.createElement("button");b.className="cls";b.type="button";b.id="c_"+id;
+ b.innerHTML=`<span class="sw" style="background:${col}"></span><span>${id}</span><span class="k">${key}</span>`;
+ b.onclick=()=>pick(id);cbox.appendChild(b)});
+function pick(id){cls=id;CLASSES.forEach(c=>$("c_"+c[0]).setAttribute("aria-pressed",c[0]===id?"true":"false"))}
+pick(cls);
+// video
+$("fileVideo").onchange=e=>{const f=e.target.files[0];if(!f)return;vid.src=URL.createObjectURL(f);current=f.name;$("vidName").textContent=f.name;$("empty").hidden=true;
+ if(!db[current])db[current]={duration:0,fps:fps(),events:[]};else $("fps").value=db[current].fps||29.97;
+ mStart=mEnd=null;updMark();renderRows();draw()};
+vid.onloadedmetadata=()=>{if(current){db[current].duration=+vid.duration.toFixed(3);save()}draw()};
+vid.ontimeupdate=()=>{tick()};
+function tick(){const t=vid.currentTime||0,d=vid.duration||0;$("clock").innerHTML=`${t.toFixed(2)} s <small>/ ${d.toFixed(2)} s · frame ${Math.round(t*fps())}</small>`;draw()}
+function seek(t){if(!vid.duration)return;vid.currentTime=Math.max(0,Math.min(vid.duration,t));tick()}
+$("bPlay").onclick=()=>{if(!vid.src)return;vid.paused?vid.play():vid.pause()};
+vid.onplay=()=>{$("bPlay").textContent="Pause";loop()};vid.onpause=()=>{$("bPlay").textContent="Play"};
+function loop(){if(!vid.paused){tick();requestAnimationFrame(loop)}}
+$("bBack").onclick=()=>seek(vid.currentTime-1);$("bFwd").onclick=()=>seek(vid.currentTime+1);
+$("bFrameBack").onclick=()=>seek(vid.currentTime-1/fps());$("bFrameFwd").onclick=()=>seek(vid.currentTime+1/fps());
+$("rate").onchange=e=>vid.playbackRate=parseFloat(e.target.value);
+$("fps").onchange=()=>{if(current){db[current].fps=fps();save()}};
+// marking
+function updMark(){$("mStart").value=fmt(mStart);$("mEnd").value=fmt(mEnd)}
+$("bStart").onclick=()=>{mStart=+vid.currentTime.toFixed(2);updMark()};
+$("bEnd").onclick=()=>{mEnd=+vid.currentTime.toFixed(2);updMark()};
+$("bAdd").onclick=add;
+function overlaps(ev,label,s,e,skip){return ev.some((x,i)=>i!==skip&&x[2]===label&&s<x[1]&&x[0]<e)}
+function add(){
+ if(!current){status("Open a video first.",true);return}
+ if(mStart==null||mEnd==null){status("Set both start and end.",true);return}
+ let s=Math.min(mStart,mEnd),e=Math.max(mStart,mEnd);
+ if(e-s<0.04){status("End must be after start.",true);return}
+ const ev=db[current].events;
+ if(overlaps(ev,cls,s,e,-1)){status(`Overlaps another ${cls} event. Two ${cls} events at the same time are one event covering both, so widen the existing one instead.`,true);return}
+ ev.push([s,e,cls]);ev.sort((a,b)=>a[0]-b[0]);mStart=mEnd=null;updMark();save();renderRows();draw();status(`Added ${cls} ${s.toFixed(2)}–${e.toFixed(2)} s`)}
+// rows
+function renderRows(){const tb=$("rows");tb.innerHTML="";if(!current)return;
+ db[current].events.forEach((x,i)=>{const tr=document.createElement("tr");
+  tr.innerHTML=`<td><span class="chip"><span class="sw" style="background:${COLOR[x[2]]}"></span>${x[2]}</span></td>
+  <td class="t"><input id="s_${i}" type="number" step="0.04" value="${x[0]}"></td><td class="t"><input id="e_${i}" type="number" step="0.04" value="${x[1]}"></td>
+  <td>${(x[1]-x[0]).toFixed(2)} s</td><td class="row"><button class="ghost" data-go="${i}">Jump</button><button class="ghost danger" data-del="${i}">Delete</button></td>`;
+  tb.appendChild(tr);
+  tr.querySelector(`#s_${i}`).onchange=ev=>edit(i,0,ev.target.value);tr.querySelector(`#e_${i}`).onchange=ev=>edit(i,1,ev.target.value)});
+ tb.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>seek(db[current].events[+b.dataset.go][0]-1));
+ tb.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{db[current].events.splice(+b.dataset.del,1);save();renderRows();draw()})}
+function edit(i,k,v){const ev=db[current].events,x=ev[i].slice();x[k]=+(+v).toFixed(2);
+ if(!(x[0]<x[1])||overlaps(ev,x[2],x[0],x[1],i)){status("That edit would make the event empty or overlap another of the same class.",true);renderRows();return}
+ ev[i]=x;save();renderRows();draw()}
+// timeline canvas
+function draw(){const dpr=window.devicePixelRatio||1,W=tl.clientWidth||600;
+ const lanes=CLASSES.map(c=>c[0]);const hint=$("showHints").checked;const LH=14,top=18,H=top+(lanes.length+(hint?1:0))*LH+6;
+ tl.width=W*dpr;tl.height=H*dpr;tl.style.height=H+"px";const g=tl.getContext("2d");g.scale(dpr,dpr);
+ const cs=getComputedStyle(document.documentElement);const ink=cs.getPropertyValue("--ink"),muted=cs.getPropertyValue("--muted"),lane=cs.getPropertyValue("--lane"),line=cs.getPropertyValue("--line");
+ const d=vid.duration||(current&&db[current]?.duration)||120,L=120,X=t=>L+(W-L-6)*t/d;
+ g.fillStyle=muted;g.font="11px 'IBM Plex Mono',monospace";g.textBaseline="middle";
+ for(let s=0;s<=d;s+=d>200?30:10){g.fillStyle=line;g.fillRect(X(s),top-4,1,H-top);g.fillStyle=muted;g.fillText(s+"s",X(s)+2,8)}
+ lanes.forEach((c,i)=>{const y=top+i*LH;g.fillStyle=i%2?lane:"transparent";g.fillRect(L,y,W-L,LH);g.fillStyle=muted;g.fillText(c,4,y+LH/2)});
+ if(current&&db[current])db[current].events.forEach(x=>{const y=top+lanes.indexOf(x[2])*LH;g.fillStyle=COLOR[x[2]];g.fillRect(X(x[0]),y+2,Math.max(2,X(x[1])-X(x[0])),LH-4)});
+ if(hint){const y=top+lanes.length*LH;g.fillStyle=muted;g.fillText("pipeline hints",4,y+LH/2);
+  (HINTS[current]||[]).forEach(x=>{g.globalAlpha=.45;g.fillStyle=COLOR[x[2]];g.fillRect(X(x[0]),y+2,Math.max(2,X(x[1])-X(x[0])),LH-4);g.globalAlpha=1})}
+ if(mStart!=null){g.fillStyle=ink;g.fillRect(X(mStart),top,1,H-top)}
+ const t=vid.currentTime||0;g.fillStyle=cs.getPropertyValue("--accent");g.fillRect(X(t)-1,top-6,2,H-top+6)}
+tl.onclick=e=>{const r=tl.getBoundingClientRect(),L=120,d=vid.duration||0;if(!d)return;seek((e.clientX-r.left-L)/(r.width-L-6)*d)};
+$("showHints").onchange=draw;window.addEventListener("resize",draw);
+// import / export
+$("fileImport").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(txt=>{const j=JSON.parse(txt);
+ const src=j.videos?Object.fromEntries(Object.entries(j.videos).map(([k,v])=>[k,{duration:0,fps:29.97,events:v.events||[]}])):j;
+ for(const [k,v] of Object.entries(src)){db[k]={duration:v.duration||db[k]?.duration||0,fps:v.fps||29.97,events:(v.events||[]).map(x=>[+x[0],+x[1],x[2]])}}
+ save();renderRows();draw();status(`Imported ${Object.keys(src).length} video(s).`)}).catch(()=>status("That file is not valid JSON.",true))};
+function exportJSON(){const o={};Object.keys(db).sort().forEach(k=>{o[k]={duration:db[k].duration,fps:db[k].fps,events:db[k].events}});return JSON.stringify(o,null,1)}
+function renderOut(){$("out").value=exportJSON()}
+$("bCopy").onclick=()=>{const txt=exportJSON();navigator.clipboard.writeText(txt).then(()=>status("Copied ground_truth.json to the clipboard.")).catch(()=>{$("out").select();status("Copy is blocked here: the JSON is selected, press Ctrl+C.",true)})};
+$("bDownload").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([exportJSON()],{type:"application/json"}));a.download="ground_truth_dev.json";a.click();
+ status("If nothing downloaded, use Copy JSON (downloads only work when this page is opened as a local file).")};
+// keyboard
+document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"&&e.target.type!=="checkbox"||e.target.tagName==="TEXTAREA"||e.target.tagName==="SELECT")return;
+ const k=e.key;if(k===" "){e.preventDefault();$("bPlay").click()}
+ else if(k==="ArrowLeft"){e.preventDefault();seek(vid.currentTime-(e.shiftKey?1:1/fps()))}
+ else if(k==="ArrowRight"){e.preventDefault();seek(vid.currentTime+(e.shiftKey?1:1/fps()))}
+ else if(k==="["){$("bStart").click()}else if(k==="]"){$("bEnd").click()}else if(k==="Enter"){add()}
+ else{const c=CLASSES.find(c=>c[2]===k.toLowerCase());if(c)pick(c[0])}});
+renderOut();draw();
+</script>

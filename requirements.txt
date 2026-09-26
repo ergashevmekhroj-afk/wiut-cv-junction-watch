@@ -1,0 +1,8 @@
+# Python >= 3.10. On the evaluation machine (Linux + NVIDIA T4) the default
+# PyPI torch wheel ships with CUDA.
+numpy>=1.24,<3
+opencv-python-headless>=4.8
+torch>=2.2
+torchvision>=0.17
+ultralytics==8.4.163
+lap>=0.5.12          # ByteTrack assignment (ultralytics would otherwise try to pip-install it at runtime)
