@@ -27,7 +27,7 @@ ENABLED = {
     "red_light", "stop_line", "stopped_vehicle", "wrong_way", "illegal_u_turn",
     "jaywalking", "failure_to_yield", "near_miss", "accident", "congestion",
 }
-MERGE_GAP = {"jaywalking": 2.0, "congestion": 5.0, "failure_to_yield": 1.0, "red_light": 0.5}
+MERGE_GAP = {"jaywalking": 4.0, "congestion": 5.0, "failure_to_yield": 3.0, "red_light": 0.5}
 MIN_LEN = {"stopped_vehicle": 10.0, "congestion": 20.0}
 
 
